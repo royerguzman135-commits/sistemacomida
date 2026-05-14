@@ -33,10 +33,13 @@ export function FloatingCart() {
 
   return (
     <>
+    {/* Fondo degradado sutil para resaltar el botón flotante y separarlo del contenido */}
+    <div className="fixed bottom-20 left-0 w-full h-24 bg-gradient-to-t from-black/20 to-transparent pointer-events-none z-[105] animate-in fade-in duration-300" />
+
     <Drawer open={isOpen} onOpenChange={setIsOpen}>
       <DrawerTrigger asChild>
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md z-50 animate-in slide-in-from-bottom-10 fade-in duration-300">
-          <Button className="w-full h-16 rounded-[2rem] bg-orange-500 hover:bg-orange-600 text-white shadow-2xl shadow-orange-500/40 flex items-center justify-between px-6 font-black text-lg active:scale-95 transition-all">
+        <div className="fixed bottom-[5.5rem] left-1/2 -translate-x-1/2 w-[90%] max-w-md z-[110] animate-in slide-in-from-bottom-10 fade-in duration-300">
+          <Button className="w-full h-16 rounded-[2rem] bg-orange-500 hover:bg-orange-600 text-white shadow-[0_10px_40px_rgba(249,115,22,0.4)] flex items-center justify-between px-6 font-black text-lg active:scale-95 transition-all">
             <div className="flex items-center gap-3">
               <div className="relative">
                 <ShoppingBag className="w-6 h-6 stroke-[2.5]" />

@@ -61,6 +61,22 @@ export function RestaurantDirectory({ initialDishes }: { initialDishes: any[] })
     })
   }
 
+  // Extraer restaurantes únicos para el carrusel
+  const featuredRestaurants = useMemo(() => {
+    const map = new Map();
+    realDishes.forEach(d => {
+      if(!map.has(d.comercioId)) {
+        map.set(d.comercioId, {
+          id: d.comercioId,
+          name: d.restaurant,
+          image: d.image, // Usamos la foto del primer platillo como portada
+          rating: (Math.random() * (5 - 4) + 4).toFixed(1) // Fake rating 4.0 - 5.0
+        })
+      }
+    })
+    return Array.from(map.values())
+  }, [realDishes])
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur">
@@ -108,27 +124,48 @@ export function RestaurantDirectory({ initialDishes }: { initialDishes: any[] })
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <section className="mb-8">
-          <h2 className="mb-2 text-3xl font-bold sm:text-4xl">Menú Real</h2>
-          <p className="text-muted-foreground">Datos cargados directamente desde Supabase.</p>
+      <main className="mx-auto max-w-7xl px-4 pt-2 pb-24 sm:px-6 lg:px-8">
+        <section className="mb-4 flex items-center justify-between">
+          <h2 className="text-2xl font-black italic uppercase tracking-tighter sm:text-3xl text-foreground drop-shadow-sm">Menú Real</h2>
         </section>
 
-        <section className="mb-8">
-          <div className="flex flex-wrap gap-2">
+        {/* Carrusel de Categorías (Pills) */}
+        <section className="mb-5">
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {categories.map((category) => (
               <Button
                 key={category.id}
                 variant={selectedCategory === category.id ? "default" : "secondary"}
                 onClick={() => setSelectedCategory(category.id)}
-                className="rounded-full px-4"
+                className={`flex-shrink-0 h-9 rounded-full px-4 text-sm font-bold transition-all active:scale-95 ${selectedCategory === category.id ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/20' : 'bg-secondary hover:bg-secondary/80 text-foreground/80'}`}
               >
-                <span className="mr-2">{category.icon}</span>
+                <span className="mr-1.5">{category.icon}</span>
                 {category.label}
               </Button>
             ))}
           </div>
         </section>
+
+        {/* Carrusel de Restaurantes Destacados */}
+        {featuredRestaurants.length > 0 && (
+          <section className="mb-6">
+            <h3 className="mb-3 text-lg font-black uppercase tracking-tight text-foreground/90">Restaurantes Destacados</h3>
+            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {featuredRestaurants.map((rest) => (
+                <div key={rest.id} className="min-w-[14rem] w-56 flex-shrink-0 rounded-[1.5rem] border border-border bg-card p-3 shadow-sm transition-transform active:scale-95">
+                  <div className="h-28 w-full overflow-hidden rounded-[1rem] bg-secondary mb-3 relative">
+                     <img src={rest.image} alt={rest.name} className="h-full w-full object-cover" />
+                     <div className="absolute top-2 right-2 flex items-center gap-1 bg-background/90 backdrop-blur-sm px-2 py-1 rounded-full shadow-sm">
+                       <span className="text-[10px] text-orange-500 font-black">★ {rest.rating}</span>
+                     </div>
+                  </div>
+                  <h4 className="font-bold text-sm leading-tight line-clamp-1">{rest.name}</h4>
+                  <p className="text-[11px] text-muted-foreground mt-1">Envío gratis • 20-30 min</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {filteredDishes.length > 0 ? (
           <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3">
