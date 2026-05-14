@@ -29,6 +29,8 @@ export const metadata: Metadata = {
   },
 }
 
+import { BottomNav } from '@/components/bottom-nav'
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -37,7 +39,10 @@ export default function RootLayout({
   return (
     <html lang="es" className="bg-background">
       <body className="font-sans antialiased">
-        {children}
+        <div className="pb-24">
+          {children}
+        </div>
+        <BottomNav />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
