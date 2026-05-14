@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
+export const dynamic = 'force-dynamic';
 import { CheckCircle2, MapPin, Phone, MessageCircle, ArrowLeft } from "lucide-react"
 
 export default async function PedidoExitosoPage({ params }: { params: Promise<{ id: string }> }) {
