@@ -7,11 +7,8 @@ import { Search, ClipboardList, Utensils, LayoutDashboard, User } from "lucide-r
 export function BottomNav() {
   const pathname = usePathname()
 
-  // Ocultamos el BottomNav en rutas donde no queremos que aparezca (como login)
-  if (pathname === '/login') return null;
-
   return (
-    <nav className="fixed bottom-0 w-full z-50 bg-background/80 backdrop-blur-md border-t border-border shadow-[0_-4px_15px_-3px_rgba(0,0,0,0.05)]">
+    <nav className="fixed bottom-0 w-full z-[100] bg-background/80 backdrop-blur-md border-t border-border shadow-[0_-4px_15px_-3px_rgba(0,0,0,0.05)]">
       <div className="max-w-md mx-auto px-6 h-20 flex items-center justify-between pb-2">
         <Link 
           href="/explorar" 
