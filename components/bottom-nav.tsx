@@ -3,12 +3,23 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Search, ClipboardList, Utensils, LayoutDashboard, User } from "lucide-react"
+import { useCartStore } from "@/store/cartStore"
+import { useEffect, useState } from "react"
 
 export function BottomNav() {
   const pathname = usePathname()
+  const items = useCartStore((state) => state.items)
+  const [isMounted, setIsMounted] = useState(false)
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  // Si hay productos en el carrito, ocultamos el menú inferior desplazándolo hacia abajo
+  const hasItems = isMounted && items.length > 0
 
   return (
-    <nav className="fixed bottom-0 w-full z-[100] bg-background/80 backdrop-blur-md border-t border-border shadow-[0_-4px_15px_-3px_rgba(0,0,0,0.05)]">
+    <nav className={`fixed bottom-0 w-full z-50 bg-background/80 backdrop-blur-md border-t border-border shadow-[0_-4px_15px_-3px_rgba(0,0,0,0.05)] transition-transform duration-300 ${hasItems ? 'translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}>
       <div className="max-w-md mx-auto px-6 h-20 flex items-center justify-between pb-2">
         <Link 
           href="/explorar" 

@@ -6,6 +6,7 @@ export interface CartItem {
   dishId: string
   name: string
   price: number // Precio final ya sumando las opciones
+  originalPrice?: number // Precio original base del platillo
   quantity: number
   resumen_opciones: string
   image: string

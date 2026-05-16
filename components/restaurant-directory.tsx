@@ -1,190 +1,230 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { Search, MapPin, ChefHat, User, Menu } from "lucide-react"
+import { useState, useMemo, useEffect } from "react"
+import { Search, ChevronRight, ShoppingCart, ArrowLeft, UtensilsCrossed } from "lucide-react"
 import Link from "next/link"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 
-import { DishCard, Dish } from "@/components/restaurant-directory/DishCard"
-import { DishSelectionDrawer } from "@/components/restaurant-directory/DishSelectionDrawer"
+import { PromoDishCard } from "@/components/restaurant-directory/PromoDishCard"
+import { RestaurantCard } from "@/components/restaurant-directory/RestaurantCard"
+import { SaborSelectCard } from "@/components/restaurant-directory/SaborSelectCard"
 import { FloatingCart } from "@/components/restaurant-directory/FloatingCart"
+import { DishSelectionDrawer } from "@/components/restaurant-directory/DishSelectionDrawer"
+import { useCartStore } from "@/store/cartStore"
 
-const categories = [
-  { id: "all", label: "Todos", icon: "🍽️" },
-  { id: "mexican", label: "Mexicana", icon: "🌮" },
-  { id: "italian", label: "Italiana", icon: "🍝" },
-  { id: "asian", label: "Asiática", icon: "🍜" },
-  { id: "desserts", label: "Postres", icon: "🍰" },
-  { id: "drinks", label: "Bebidas", icon: "🥤" },
-]
-
-export function RestaurantDirectory({ initialDishes }: { initialDishes: any[] }) {
+export function RestaurantDirectory({ 
+  initialCategorias, 
+  initialComercios, 
+  initialPlatillos 
+}: { 
+  initialCategorias: any[], 
+  initialComercios: any[], 
+  initialPlatillos: any[] 
+}) {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all")
-  const [favorites, setFavorites] = useState<Set<string>>(new Set())
-  const [selectedDish, setSelectedDish] = useState<Dish | null>(null)
+  const [selectedDish, setSelectedDish] = useState<any>(null)
+  const [isMounted, setIsMounted] = useState(false)
+  const items = useCartStore((state) => state.items)
 
-  // Transformamos los datos de Supabase al formato que la tarjeta necesita
- const realDishes = useMemo<Dish[]>(() => {
-    return initialDishes.map((db) => ({
-      id: db.id,
-      name: db.nombre,
-      description: db.descripcion || "Sin descripción",
-      price: db.precio,
-      image: db.imagen_url || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400",
-      category: db.categoria || "mexican",
-      rating: 4.9,
-      restaurant: db.comercios?.nombre || "Negocio Local", 
-      comercioId: db.comercio_id,
-      restaurantLogo: "🍴",
-      prepTime: "20 min",
-      isPopular: true
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
+
+  // 1. Categorías
+  const categories = useMemo(() => {
+    const base = [{ id: "all", nombre: "Todos", imagen_url: null }]
+    return [...base, ...initialCategorias]
+  }, [initialCategorias])
+
+  // 2. Sabor Select (Carrusel de Comercios Destacados)
+  const saborSelectCommerces = useMemo(() => {
+    return initialComercios
+      .filter(c => c.es_destacado)
+      .map(c => ({
+        id: c.id,
+        name: c.nombre,
+        image: c.imagen_url,
+        logo: c.logo_url,
+        rating: c.rating || 4.5,
+        deliveryTime: c.tiempo_entrega || "20-30 min",
+        deliveryFee: c.costo_envio || 0
+      }))
+  }, [initialComercios])
+
+  // 3. Deliofertas (Platillos populares o con descuento)
+  const promoDishes = useMemo(() => {
+    return initialPlatillos
+      .filter(p => p.es_popular || (p.precio_original && p.precio_original > p.precio))
+      .map(p => ({
+        id: p.id,
+        name: p.nombre,
+        price: p.precio,
+        originalPrice: p.precio_original,
+        image: p.imagen_url,
+        description: p.descripcion,
+        comercioId: p.comercio_id
+      }))
+  }, [initialPlatillos])
+
+  // 4. Feed Vertical (Todos los restaurantes)
+  const feedCommerces = useMemo(() => {
+    return initialComercios.map(c => ({
+      id: c.id,
+      name: c.nombre,
+      image: c.imagen_url,
+      logo: c.logo_url,
+      rating: c.rating || 4.5,
+      deliveryTime: c.tiempo_entrega || "20-30 min",
+      deliveryFee: c.costo_envio || 0,
+      // Mock data para UI
+      promoActive: true
     }))
-  }, [initialDishes])
-
-  const filteredDishes = useMemo(() => {
-    return realDishes.filter((dish) => {
-      const matchesSearch =
-        dish.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        dish.restaurant.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesCategory = selectedCategory === "all" || dish.category === selectedCategory
-      return matchesSearch && matchesCategory
-    })
-  }, [searchQuery, selectedCategory, realDishes])
-
-  const toggleFavorite = (id: string) => {
-    setFavorites((prev) => {
-      const newFavorites = new Set(prev)
-      newFavorites.has(id) ? newFavorites.delete(id) : newFavorites.add(id)
-      return newFavorites
-    })
-  }
-
-  // Extraer restaurantes únicos para el carrusel
-  const featuredRestaurants = useMemo(() => {
-    const map = new Map();
-    realDishes.forEach(d => {
-      if(!map.has(d.comercioId)) {
-        map.set(d.comercioId, {
-          id: d.comercioId,
-          name: d.restaurant,
-          image: d.image, // Usamos la foto del primer platillo como portada
-          rating: (Math.random() * (5 - 4) + 4).toFixed(1) // Fake rating 4.0 - 5.0
-        })
-      }
-    })
-    return Array.from(map.values())
-  }, [realDishes])
+  }, [initialComercios])
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex w-full items-center justify-between sm:w-auto">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
-                  <ChefHat className="h-6 w-6 text-primary-foreground" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold">Sabor Local</h1>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <MapPin className="h-3 w-3" />
-                    Mexicali, B.C.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 sm:hidden">
-                <Link href="/perfil" className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-secondary-foreground hover:bg-primary hover:text-primary-foreground transition-colors">
-                  <User className="h-5 w-5" />
-                </Link>
-                <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full">
-                  <Menu className="h-5 w-5" />
-                </Button>
-              </div>
-            </div>
-            <div className="flex w-full items-center gap-4 sm:max-w-md">
+    <div className="min-h-screen bg-background text-foreground pb-24">
+      {/* 1. Header Persistente (Sticky) */}
+      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-md border-b border-border shadow-sm">
+        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3">
+            <Link href="/">
+              <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-full active:scale-95">
+                <ArrowLeft className="h-6 w-6" />
+              </Button>
+            </Link>
+            
+            <div className="relative flex-1 flex items-center">
               <div className="relative w-full">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   type="text"
-                  placeholder="Buscar en Mexicali..."
+                  placeholder="¿Qué se te antoja hoy?"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-11 w-full rounded-xl border-border bg-secondary pl-10 pr-4"
+                  className="h-11 w-full rounded-l-full rounded-r-none border-border bg-secondary pl-10 pr-4 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
                 />
               </div>
-              <Link href="/perfil" className="hidden h-11 px-4 items-center gap-2 rounded-xl bg-secondary font-semibold text-secondary-foreground hover:bg-primary hover:text-primary-foreground transition-colors sm:flex">
-                <User className="h-5 w-5" />
-                Mi Perfil
-              </Link>
+              <Button className="h-11 rounded-l-none rounded-r-full bg-orange-500 hover:bg-orange-600 px-4 text-sm font-bold text-white shadow-sm transition-all active:scale-95">
+                Buscar
+              </Button>
+            </div>
+
+            <div className="relative shrink-0">
+              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full active:scale-95">
+                <ShoppingCart className="h-6 w-6" />
+              </Button>
+              {isMounted && totalItems > 0 && (
+                <div className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-[10px] font-black text-white shadow-sm ring-2 ring-background">
+                  {totalItems}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 pt-2 pb-24 sm:px-6 lg:px-8">
-        <section className="mb-4 flex items-center justify-between">
-          <h2 className="text-2xl font-black italic uppercase tracking-tighter sm:text-3xl text-foreground drop-shadow-sm">Menú Real</h2>
-        </section>
-
-        {/* Carrusel de Categorías (Pills) */}
-        <section className="mb-5">
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <main className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8 space-y-8">
+        
+        {/* 2. Sección de Categorías (Circle Chips) */}
+        <section>
+          <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x">
             {categories.map((category) => (
-              <Button
+              <button
                 key={category.id}
-                variant={selectedCategory === category.id ? "default" : "secondary"}
                 onClick={() => setSelectedCategory(category.id)}
-                className={`flex-shrink-0 h-9 rounded-full px-4 text-sm font-bold transition-all active:scale-95 ${selectedCategory === category.id ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/20' : 'bg-secondary hover:bg-secondary/80 text-foreground/80'}`}
+                className="flex shrink-0 snap-start flex-col items-center gap-2 outline-none group"
               >
-                <span className="mr-1.5">{category.icon}</span>
-                {category.label}
-              </Button>
+                <div className={`flex h-16 w-16 items-center justify-center rounded-full border-2 transition-all group-active:scale-95 ${
+                  selectedCategory === category.id || (selectedCategory === "all" && category.id === "all")
+                    ? "border-orange-500 bg-orange-50"
+                    : "border-border bg-secondary hover:border-orange-500/50"
+                }`}>
+                  {category.imagen_url ? (
+                    <img src={category.imagen_url} alt={category.nombre} className="h-8 w-8 object-contain" />
+                  ) : (
+                    <UtensilsCrossed className={`h-6 w-6 ${selectedCategory === category.id ? "text-orange-500" : "text-muted-foreground"}`} />
+                  )}
+                </div>
+                <span className={`text-[11px] font-bold ${
+                  selectedCategory === category.id ? "text-orange-500" : "text-foreground/80"
+                }`}>
+                  {category.nombre}
+                </span>
+              </button>
             ))}
           </div>
         </section>
 
-        {/* Carrusel de Restaurantes Destacados */}
-        {featuredRestaurants.length > 0 && (
-          <section className="mb-6">
-            <h3 className="mb-3 text-lg font-black uppercase tracking-tight text-foreground/90">Restaurantes Destacados</h3>
-            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {featuredRestaurants.map((rest) => (
-                <div key={rest.id} className="min-w-[14rem] w-56 flex-shrink-0 rounded-[1.5rem] border border-border bg-card p-3 shadow-sm transition-transform active:scale-95">
-                  <div className="h-28 w-full overflow-hidden rounded-[1rem] bg-secondary mb-3 relative">
-                     <img src={rest.image} alt={rest.name} className="h-full w-full object-cover" />
-                     <div className="absolute top-2 right-2 flex items-center gap-1 bg-background/90 backdrop-blur-sm px-2 py-1 rounded-full shadow-sm">
-                       <span className="text-[10px] text-orange-500 font-black">★ {rest.rating}</span>
-                     </div>
-                  </div>
-                  <h4 className="font-bold text-sm leading-tight line-clamp-1">{rest.name}</h4>
-                  <p className="text-[11px] text-muted-foreground mt-1">Envío gratis • 20-30 min</p>
-                </div>
+        {/* 3. Sección 'Deliofertas' (Carrusel de Productos) */}
+        {promoDishes.length > 0 && (
+          <section>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-xl font-black italic tracking-tight text-foreground flex items-center gap-1">
+                Deliofertas <ChevronRight className="h-5 w-5 text-orange-500" />
+              </h2>
+            </div>
+            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x px-1">
+              {promoDishes.map((dish) => (
+                <PromoDishCard 
+                  key={dish.id} 
+                  dish={dish} 
+                  onClick={(d) => setSelectedDish(d)}
+                />
               ))}
             </div>
           </section>
         )}
 
-        {filteredDishes.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3">
-            {filteredDishes.map((dish) => (
-              <DishCard 
-                key={dish.id} 
-                dish={dish} 
-                onFavorite={toggleFavorite} 
-                isFavorite={favorites.has(dish.id)} 
-                onClick={setSelectedDish}
-              />
+        {/* 4. Sección 'Sabor Select' (Carrusel de Negocios) */}
+        {saborSelectCommerces.length > 0 && (
+          <section>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-xl font-black italic tracking-tight text-foreground flex items-center gap-1">
+                Sabor Select <ChevronRight className="h-5 w-5 text-orange-500" />
+              </h2>
+            </div>
+            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x px-1">
+              {saborSelectCommerces.map((commerce) => (
+                <SaborSelectCard key={commerce.id} commerce={commerce} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* 5. Barra de Filtros Dinámica */}
+        <section className="sticky top-[73px] z-40 -mx-4 bg-background/95 px-4 py-3 backdrop-blur-md sm:mx-0 sm:px-0">
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <Button variant="outline" className="h-8 shrink-0 rounded-full border-border bg-card px-4 text-xs font-bold shadow-sm">
+              Filtros
+            </Button>
+            <Button variant="outline" className="h-8 shrink-0 rounded-full border-border bg-card px-4 text-xs font-bold shadow-sm">
+              Ordenar
+            </Button>
+            <Button variant="outline" className="h-8 shrink-0 rounded-full border-border bg-card px-4 text-xs font-bold shadow-sm">
+              Más Populares
+            </Button>
+            <Button variant="outline" className="h-8 shrink-0 rounded-full border-border bg-card px-4 text-xs font-bold shadow-sm">
+              Envío Gratis
+            </Button>
+          </div>
+        </section>
+
+        {/* 6. Feed Vertical (Lista de Restaurantes) */}
+        <section>
+          <h2 className="mb-4 text-xl font-black italic tracking-tight text-foreground">
+            Todos los negocios
+          </h2>
+          <div className="flex flex-col gap-6">
+            {feedCommerces.map((commerce) => (
+              <RestaurantCard key={commerce.id} commerce={commerce} />
             ))}
           </div>
-        ) : (
-          <div className="py-20 text-center">
-            <p className="text-xl font-semibold">No hay platillos en la base de datos.</p>
-            <p className="text-muted-foreground">Agrega datos en Supabase para verlos aquí.</p>
-          </div>
-        )}
+        </section>
+
       </main>
 
       <DishSelectionDrawer 

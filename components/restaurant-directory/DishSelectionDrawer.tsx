@@ -5,15 +5,12 @@ import { supabase } from "@/lib/supabase"
 import {
   Drawer,
   DrawerContent,
-  DrawerHeader,
   DrawerTitle,
-  DrawerDescription,
-  DrawerFooter,
   DrawerClose,
 } from "@/components/ui/drawer"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Check } from "lucide-react"
+import { Check, X, Minus, Plus } from "lucide-react"
 import { Dish } from "./DishCard"
 import { useCartStore } from "@/store/cartStore"
 
@@ -43,11 +40,15 @@ export function DishSelectionDrawer({ dish, isOpen, onClose }: DishSelectionDraw
   const [loading, setLoading] = useState(false)
   const [grupos, setGrupos] = useState<GrupoOpciones[]>([])
   const [selections, setSelections] = useState<Record<string, string[]>>({})
+  const [specialInstructions, setSpecialInstructions] = useState("")
+  const [quantity, setQuantity] = useState(1)
 
   // Limpiar selecciones cuando se abre un nuevo platillo
   useEffect(() => {
     if (isOpen) {
       setSelections({})
+      setSpecialInstructions("")
+      setQuantity(1)
     }
   }, [isOpen, dish?.id])
 
@@ -97,8 +98,8 @@ export function DishSelectionDrawer({ dish, isOpen, onClose }: DishSelectionDraw
     })
   }
 
-  // Calculadora en Tiempo Real
-  const totalPrice = useMemo(() => {
+  // Calculadora en Tiempo Real (precio unitario)
+  const unitPrice = useMemo(() => {
     if (!dish) return 0
     let total = dish.price
     
@@ -113,6 +114,8 @@ export function DishSelectionDrawer({ dish, isOpen, onClose }: DishSelectionDraw
     
     return total
   }, [dish, grupos, selections])
+
+  const totalPrice = unitPrice * quantity
 
   // Validación de Completitud
   const isValid = useMemo(() => {
@@ -140,83 +143,103 @@ export function DishSelectionDrawer({ dish, isOpen, onClose }: DishSelectionDraw
       }
     })
     
-    const resumen = summaryParts.join(' | ') || 'Original (Sin modificaciones)'
+    let resumen = summaryParts.join(' | ') || 'Original (Sin modificaciones)'
+    
+    if (specialInstructions.trim() !== '') {
+      resumen += ` | Notas: ${specialInstructions.trim()}`
+    }
     
     // Instanciar item para Zustand
     useCartStore.getState().addItem({
       id: Math.random().toString(36).substring(2, 10),
       dishId: dish.id,
       name: dish.name,
-      price: totalPrice,
-      quantity: 1,
+      price: unitPrice,
+      originalPrice: dish.originalPrice,
+      quantity: quantity,
       resumen_opciones: resumen,
       image: dish.image,
       comercioId: dish.comercioId,
     })
     
-    alert(`✅ ¡Añadido al Carrito!\n\n${dish.name}\n${resumen}\nTotal: $${totalPrice}`)
+    if (navigator.vibrate) navigator.vibrate([30, 50, 30])
     onClose()
   }
 
-  // Estado para el Sticky Header Pro
-  const [isScrolled, setIsScrolled] = useState(false)
-
   if (!dish) return null
+
+  const discountPercentage = dish.originalPrice && dish.originalPrice > dish.price
+    ? Math.round(((dish.originalPrice - dish.price) / dish.originalPrice) * 100)
+    : 0
 
   return (
     <Drawer open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DrawerContent className="max-h-[90vh] flex flex-col bg-background text-foreground border-border overflow-hidden">
-        {/* Título oculto para accesibilidad de lectores de pantalla */}
+      <DrawerContent className="h-[95vh] flex flex-col bg-zinc-950 text-white border-zinc-900 rounded-t-[2rem] overflow-hidden">
         <DrawerTitle className="sr-only">{dish.name}</DrawerTitle>
         
-        {/* Sticky Header "Pro" - Aparece cuando la imagen principal sale de vista */}
-        <div className={`absolute top-0 left-0 right-0 bg-background/95 backdrop-blur-md z-50 px-6 py-4 flex justify-between items-center transition-all duration-300 border-b border-border shadow-sm ${isScrolled ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'}`}>
-          <div className="flex flex-col flex-1 truncate pr-4">
-            <span className="font-black italic uppercase truncate leading-none text-foreground">{dish.name}</span>
-            <span className="font-bold text-orange-500 text-sm mt-0.5">${totalPrice.toFixed(2)}</span>
-          </div>
-          <DrawerClose asChild>
-            <button className="h-8 w-8 flex items-center justify-center bg-secondary rounded-full text-muted-foreground hover:text-foreground">✕</button>
-          </DrawerClose>
-        </div>
-
-        <div 
-          className="flex-1 overflow-y-auto"
-          onScroll={(e) => setIsScrolled(e.currentTarget.scrollTop > 180)}
-        >
-          {/* Imagen Full Width dentro del Scroll */}
-          <div className="relative w-full aspect-video sm:h-64 bg-secondary">
+        <div className="flex-1 overflow-y-auto pb-[100px] bg-zinc-950">
+          {/* Hero Header */}
+          <div className="relative w-full aspect-square sm:h-72 bg-zinc-900">
             <img 
               src={dish.image} 
               alt={dish.name} 
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+            {/* Gradiente sutil superior para que se vea bien el botón X */}
+            <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/70 to-transparent" />
+            
             <DrawerClose asChild>
-              <Button variant="outline" size="icon" className="absolute top-4 right-4 h-10 w-10 rounded-full bg-black/40 backdrop-blur-md border-white/20 text-white hover:bg-black/60 shadow-lg transition-transform active:scale-95 z-10">
-                ✕
-              </Button>
+              <button className="absolute top-4 left-4 h-10 w-10 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white shadow-sm hover:bg-black/60 transition-all active:scale-95 z-10">
+                <X className="w-5 h-5 stroke-[2.5]" />
+              </button>
             </DrawerClose>
           </div>
 
-          <div className="px-6 pt-6 pb-2">
-            <h2 className="text-3xl font-black italic uppercase tracking-tighter drop-shadow-sm text-foreground">{dish.name}</h2>
-            <p className="text-[15px] text-muted-foreground mt-2 leading-relaxed">
-              {dish.description}
-            </p>
+          {/* Cuerpo de Información */}
+          <div className="px-5 py-5">
+            <h2 className="text-2xl font-black text-white tracking-tight leading-none mb-2">
+              {dish.name}
+            </h2>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="bg-green-900/30 text-green-500 px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1">
+                👍 82%
+              </span>
+            </div>
+            
+            {/* Bloque de Precios */}
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xl font-black text-orange-500">${dish.price.toFixed(2)}</span>
+              {dish.originalPrice && dish.originalPrice > dish.price && (
+                <>
+                  <span className="text-sm font-semibold line-through text-zinc-500">
+                    ${dish.originalPrice.toFixed(2)}
+                  </span>
+                  <span className="bg-orange-900/30 text-orange-500 px-2 py-0.5 rounded-md text-xs font-black">
+                    {discountPercentage}% OFF
+                  </span>
+                </>
+              )}
+            </div>
+
+            {dish.description && (
+              <p className="text-sm text-zinc-400 leading-relaxed font-normal">
+                {dish.description}
+              </p>
+            )}
           </div>
 
-          <div className="px-4 py-4 space-y-6">
+          {/* Complementos (Modificadores) */}
+          <div className="px-4 pb-4">
             {loading ? (
-              <div className="space-y-6 px-2">
+              <div className="space-y-4">
                 {[1, 2].map((i) => (
-                  <div key={i} className="space-y-3">
+                  <div key={i} className="bg-zinc-900/40 border border-zinc-800/60 p-4 rounded-2xl space-y-3">
                     <div className="flex justify-between items-center">
-                      <Skeleton className="h-5 w-1/2 rounded-md" />
-                      <Skeleton className="h-4 w-16 rounded-full" />
+                      <Skeleton className="h-5 w-1/2 rounded-md bg-zinc-800" />
+                      <Skeleton className="h-4 w-16 rounded-full bg-zinc-800" />
                     </div>
-                    <Skeleton className="h-14 w-full rounded-2xl" />
-                    <Skeleton className="h-14 w-full rounded-2xl" />
+                    <Skeleton className="h-12 w-full rounded-xl bg-zinc-800" />
+                    <Skeleton className="h-12 w-full rounded-xl bg-zinc-800" />
                   </div>
                 ))}
               </div>
@@ -226,30 +249,30 @@ export function DishSelectionDrawer({ dish, isOpen, onClose }: DishSelectionDraw
                 const reachedLimit = grupo.es_multi_seleccion && grupo.limite_maximo > 0 && selectedIds.length >= grupo.limite_maximo
 
                 return (
-                  <div key={grupo.id} className="space-y-3 px-2">
-                    <div className="flex justify-between items-center">
-                      <h4 className="font-bold text-foreground uppercase italic tracking-wide">{grupo.titulo}</h4>
-                      <div className="flex items-center gap-2">
-                        {grupo.es_multi_seleccion && grupo.limite_maximo > 0 && (
-                          <span className="text-[10px] font-bold text-muted-foreground">
-                            Max {grupo.limite_maximo}
-                          </span>
-                        )}
-                        <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-md ${grupo.es_obligatorio && selectedIds.length === 0 ? 'bg-red-500/10 text-red-500' : 'bg-secondary text-muted-foreground'}`}>
-                          {grupo.es_obligatorio ? 'Requerido' : 'Opcional'}
-                        </span>
-                      </div>
+                  <div key={grupo.id} className="bg-zinc-900/40 border border-zinc-800/60 p-4 rounded-2xl mb-4">
+                    <div className="flex justify-between items-center mb-1">
+                      <h4 className="text-base font-bold text-white">
+                        {grupo.titulo}
+                      </h4>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${grupo.es_obligatorio ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-400'}`}>
+                        {grupo.es_obligatorio ? 'Obligatorio' : 'Opcional'}
+                      </span>
                     </div>
+                    <p className="text-sm text-zinc-400 mb-4">
+                      {grupo.es_multi_seleccion 
+                        ? (grupo.limite_maximo > 0 ? `Selecciona hasta ${grupo.limite_maximo}` : 'Selecciona múltiples opciones') 
+                        : 'Selecciona 1'}
+                    </p>
                     
-                    <div className="space-y-3">
-                      {grupo.opciones_items?.filter(item => item.disponible).map((item) => {
+                    <div className="space-y-0.5">
+                      {grupo.opciones_items?.filter(item => item.disponible).map((item, index, arr) => {
                         const isSelected = selectedIds.includes(item.id)
                         const isDisabled = !isSelected && reachedLimit
 
                         return (
                           <label 
                             key={item.id} 
-                            className={`relative flex items-center justify-between p-4 rounded-[1.25rem] border-2 transition-all cursor-pointer ${isSelected ? 'border-orange-500 bg-orange-500/5 shadow-md shadow-orange-500/10' : 'border-transparent bg-secondary/60'} ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'hover:border-orange-500/30 active:scale-[0.98]'}`}
+                            className={`flex items-center justify-between py-3 cursor-pointer transition-opacity ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'active:opacity-70'} ${index !== arr.length - 1 ? 'border-b border-zinc-800/50' : ''}`}
                           >
                             <input 
                               type={grupo.es_multi_seleccion ? "checkbox" : "radio"} 
@@ -257,20 +280,26 @@ export function DishSelectionDrawer({ dish, isOpen, onClose }: DishSelectionDraw
                               checked={isSelected}
                               disabled={isDisabled}
                               onChange={() => {
-                                if (navigator.vibrate) navigator.vibrate(20);
+                                if (navigator.vibrate) navigator.vibrate(10);
                                 handleSelection(grupo.id, item.id, grupo.es_multi_seleccion, grupo.limite_maximo);
                               }}
                               className="sr-only"
                             />
-                            <div className="flex items-center gap-4">
-                              <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all border-2 ${isSelected ? 'border-orange-500 bg-orange-500' : 'border-muted-foreground/30 bg-background'}`}>
-                                {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
-                              </div>
-                              <span className={`font-bold text-[15px] ${isSelected ? 'text-foreground' : 'text-foreground/80'}`}>{item.nombre}</span>
+                            <div className="flex-1 pr-4">
+                              <span className={`text-[15px] font-medium ${isSelected ? 'text-white' : 'text-zinc-300'}`}>
+                                {item.nombre}
+                              </span>
+                              {item.precio_adicional > 0 && (
+                                <span className="text-sm text-orange-500 ml-2">
+                                  +${item.precio_adicional.toFixed(2)}
+                                </span>
+                              )}
                             </div>
-                            {item.precio_adicional > 0 && (
-                              <span className={`text-[15px] font-black ${isSelected ? 'text-orange-500' : 'text-muted-foreground'}`}>+${item.precio_adicional.toFixed(2)}</span>
-                            )}
+                            
+                            {/* Checkbox/Radio UI Didi Style */}
+                            <div className={`w-[22px] h-[22px] shrink-0 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'border-orange-500 bg-orange-500' : 'border-zinc-700 bg-transparent'}`}>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-white" strokeWidth={4} />}
+                            </div>
                           </label>
                         )
                       })}
@@ -278,26 +307,63 @@ export function DishSelectionDrawer({ dish, isOpen, onClose }: DishSelectionDraw
                   </div>
                 )
               })
-            ) : (
-               <div className="text-center py-6 text-muted-foreground italic text-sm">
-                 Este platillo no requiere configuración adicional.
-               </div>
+            ) : null}
+            
+            {/* Campo de Instrucciones Especiales */}
+            {!loading && (
+              <div className="bg-zinc-900/40 border border-zinc-800/60 p-4 rounded-2xl mb-4">
+                <h4 className="text-base font-bold text-white mb-3">Instrucciones Especiales</h4>
+                <textarea 
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-[15px] text-white resize-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all placeholder:text-zinc-500"
+                  rows={2}
+                  placeholder="Ej. Sin cebolla, aderezo aparte..."
+                  value={specialInstructions}
+                  onChange={(e) => setSpecialInstructions(e.target.value)}
+                />
+              </div>
             )}
           </div>
         </div>
 
-        <DrawerFooter className="border-t border-border/50 pt-4 pb-8 px-6 bg-background z-10">
+        {/* Barra de Acción Fija */}
+        <div className="absolute bottom-0 left-0 right-0 bg-zinc-950 border-t border-zinc-900 p-4 flex gap-3 z-20">
+          {/* Selector de Cantidad */}
+          <div className="bg-zinc-900 border border-zinc-800/60 rounded-2xl flex items-center justify-between p-1.5 w-32 shrink-0">
+            <button 
+              onClick={() => {
+                if (navigator.vibrate) navigator.vibrate(10)
+                setQuantity(Math.max(1, quantity - 1))
+              }}
+              className="w-10 h-10 rounded-xl bg-zinc-800 hover:bg-zinc-700 shadow-sm flex items-center justify-center active:scale-95 transition-all text-white"
+            >
+              <Minus className="w-4 h-4" strokeWidth={3} />
+            </button>
+            <span className="font-bold text-white text-[15px]">
+              {quantity}
+            </span>
+            <button 
+              onClick={() => {
+                if (navigator.vibrate) navigator.vibrate(10)
+                setQuantity(quantity + 1)
+              }}
+              className="w-10 h-10 rounded-xl bg-zinc-800 hover:bg-zinc-700 shadow-sm flex items-center justify-center active:scale-95 transition-all text-white"
+            >
+              <Plus className="w-4 h-4" strokeWidth={3} />
+            </button>
+          </div>
+
+          {/* Botón Agregar */}
           <Button 
             onClick={() => {
                if (navigator.vibrate) navigator.vibrate(50);
                handleAddToCart();
             }}
-            disabled={!isValid}
-            className={`w-full h-16 rounded-[2rem] font-black text-xl shadow-xl transition-all uppercase tracking-tight ${isValid ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/30 active:scale-[0.97]' : 'bg-secondary text-muted-foreground opacity-50'}`}
+            disabled={!isValid || loading}
+            className={`flex-1 h-[52px] rounded-2xl font-bold text-[17px] transition-all shadow-none ${isValid ? 'bg-orange-500 hover:bg-orange-600 text-white active:scale-[0.98]' : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'}`}
           >
-            {isValid ? `Agregar • $${totalPrice.toFixed(2)}` : 'Completa las opciones'}
+            Agregar • ${totalPrice.toFixed(2)}
           </Button>
-        </DrawerFooter>
+        </div>
       </DrawerContent>
     </Drawer>
   )
