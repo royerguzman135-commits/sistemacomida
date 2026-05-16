@@ -174,7 +174,7 @@ export function DishSelectionDrawer({ dish, isOpen, onClose }: DishSelectionDraw
 
   return (
     <Drawer open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DrawerContent className="h-[95vh] flex flex-col bg-zinc-950 text-white border-zinc-900 rounded-t-[2rem] overflow-hidden">
+      <DrawerContent className="h-[95dvh] flex flex-col bg-zinc-950 text-white border-zinc-900 rounded-t-[2rem] overflow-hidden">
         <DrawerTitle className="sr-only">{dish.name}</DrawerTitle>
         
         <div className="flex-1 overflow-y-auto pb-[100px] bg-zinc-950">

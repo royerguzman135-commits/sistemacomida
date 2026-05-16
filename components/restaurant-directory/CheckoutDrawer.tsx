@@ -141,16 +141,27 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
         token: otp, 
         type: 'sms' 
       })
+      
       if (error) throw error
-      if (data.session) {
-        setUserId(data.session.user.id)
-        setStep(3)
+
+      if (data?.user) {
+        // Envolvemos en setTimeout para ceder el hilo principal (event loop)
+        // y evitar el error "releasePointerCapture" nativo de Radix UI / navegadores
+        setTimeout(() => {
+          // 1. NO usamos onClose() para que no se cierre la ventana.
+          // 2. Avanzamos el paso de forma manual
+          setUserId(data.user.id)
+          setStep(3)
+          
+          // 3. Refrescamos los datos del servidor para que el layout sepa que ya hay sesión activa
+          router.refresh()
+        }, 50)
       }
     } catch (error: any) {
       console.error(error)
       alert("Código inválido o ha expirado.")
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   // 2. Obtener Ubicación GPS
@@ -504,7 +515,7 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
   )
 
   return (
-    <Drawer dismissible={false} open={isOpen} onOpenChange={(o) => {
+    <Drawer repositionInputs={false} dismissible={false} open={isOpen} onOpenChange={(o) => {
       if(!o && step !== 4) {
         onClose()
         // Reset only if not authenticated, else keep at step 3
@@ -514,7 +525,7 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
         }, 500)
       }
     }}>
-      <DrawerContent className="max-h-[95vh] flex flex-col bg-zinc-950 text-white border-zinc-900 rounded-t-[2rem]">
+      <DrawerContent className="max-h-[95dvh] flex flex-col bg-zinc-950 text-white border-zinc-900 rounded-t-[2rem]">
         {/* Título oculto para accesibilidad */}
         <DrawerTitle className="sr-only">Checkout Sabor Local</DrawerTitle>
         
@@ -543,7 +554,10 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
               </DrawerHeader>
             )}
             
-            <div className="overflow-y-auto flex-1 w-full pb-[max(2rem,env(safe-area-inset-bottom))]">
+            <div 
+              key={userId || 'invitado'} 
+              className="overflow-y-auto flex-1 w-full pb-[max(2rem,env(safe-area-inset-bottom))] transition-all duration-300 ease-in-out"
+            >
               {step === 1 && renderStep1()}
               {step === 2 && renderStep2()}
               {step === 3 && renderStep3()}
