@@ -167,25 +167,33 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
   // 2. Obtener Ubicación GPS
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
-      alert("Tu navegador no soporta geolocalización.")
+      alert("No se pudo acceder a tu ubicación. Por favor, verifica que tengas los permisos de localización activos en tu celular y estés usando una conexión segura HTTPS.")
       return
     }
     setGpsLoading(true)
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setCoords({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        })
-        setGpsLoading(false)
-        if (navigator.vibrate) navigator.vibrate(50)
-      },
-      (error) => {
-        alert("No se pudo obtener tu ubicación. Por favor, asegúrate de dar permisos.")
-        setGpsLoading(false)
-      },
-      { enableHighAccuracy: true }
-    )
+    
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCoords({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          })
+          setGpsLoading(false)
+          if (navigator.vibrate) navigator.vibrate(50)
+        },
+        (error) => {
+          console.error("Error GPS:", error)
+          alert("No se pudo acceder a tu ubicación. Por favor, verifica que tengas los permisos de localización activos en tu celular y estés usando una conexión segura HTTPS.")
+          setGpsLoading(false)
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      )
+    } catch (e) {
+      console.error("Excepción GPS:", e)
+      alert("No se pudo acceder a tu ubicación. Por favor, verifica que tengas los permisos de localización activos en tu celular y estés usando una conexión segura HTTPS.")
+      setGpsLoading(false)
+    }
   }
 
   // 3. Confirmar Pedido
@@ -465,7 +473,7 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
             className={`w-full h-14 rounded-xl font-bold flex items-center gap-2 border-2 transition-all ${coords ? 'bg-green-900/30 border-green-500 text-green-500' : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800'}`}
           >
             {gpsLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Map className="w-5 h-5" />}
-            {coords ? '✅ Ubicación GPS Capturada' : 'Capturar mi ubicación GPS (Recomendado)'}
+            {coords ? '✅ Obtener ubicacion' : 'Obtener ubicacion'}
           </Button>
         </div>
       )}
