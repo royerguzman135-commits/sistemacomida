@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { MapPin, Phone, Map, Loader2, ArrowRight, CheckCircle2, X, Mail } from "lucide-react"
+import { MapPin, Phone, Map, Loader2, ArrowRight, CheckCircle2, X } from "lucide-react"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
 import { useCartStore } from "@/store/cartStore"
 import { useRouter } from "next/navigation"
@@ -27,16 +27,14 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
   const router = useRouter()
   const { items, clearCart } = useCartStore()
   
-  // Pasos: 1 = Email, 2 = OTP, 3 = Dirección/Contacto, 4 = Éxito
+  // Pasos: 1 = Teléfono, 2 = OTP, 3 = Dirección/Contacto, 4 = Éxito
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
   const [loading, setLoading] = useState(false)
   const [authChecking, setAuthChecking] = useState(true)
 
-  // Datos Auth
-  const [email, setEmail] = useState("")
+  // Datos Auth SMS
+  const [telefonoAuth, setTelefonoAuth] = useState("")
   const [otp, setOtp] = useState("")
-  const [password, setPassword] = useState("")
-  const [usePassword, setUsePassword] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
 
   // Datos de Contacto y Dirección
@@ -66,7 +64,7 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
     }
   }, [isOpen])
 
-  // Listener para detectar si confirma desde otra pestaña (Magic Link)
+  // Listener para detectar cambios en Auth
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
@@ -109,32 +107,40 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
     }
   }, [step, userId])
 
-  // 1. Enviar Email OTP
-  const handleEnviarEmail = async (e: React.FormEvent) => {
+  // 1. Enviar SMS OTP
+  const handleEnviarSMS = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email || !email.includes('@')) {
-      alert("Por favor ingresa un correo electrónico válido.")
+    const telefonoLimpio = telefonoAuth.replace(/\\D/g, '').slice(-10)
+    if (telefonoLimpio.length !== 10) {
+      alert("Por favor ingresa un número de teléfono válido de 10 dígitos.")
       return
     }
     setLoading(true)
     try {
-      const { error } = await supabase.auth.signInWithOtp({ email })
+      const { error } = await supabase.auth.signInWithOtp({ 
+        phone: `+52${telefonoLimpio}`
+      })
       if (error) throw error
       setStep(2)
     } catch (error: any) {
       console.error(error)
-      alert("Ocurrió un error al enviar el código.")
+      alert("Ocurrió un error al enviar el código. Por favor revisa el número e intenta nuevamente.")
     }
     setLoading(false)
   }
 
-  // 2. Verificar OTP
-  const handleVerificarOTP = async (e: React.FormEvent) => {
+  // 2. Verificar SMS OTP
+  const handleVerificarSMS = async (e: React.FormEvent) => {
     e.preventDefault()
     if (otp.length !== 6) return
+    const telefonoLimpio = telefonoAuth.replace(/\\D/g, '').slice(-10)
     setLoading(true)
     try {
-      const { data, error } = await supabase.auth.verifyOtp({ email, token: otp, type: 'email' })
+      const { data, error } = await supabase.auth.verifyOtp({ 
+        phone: `+52${telefonoLimpio}`,
+        token: otp, 
+        type: 'sms' 
+      })
       if (error) throw error
       if (data.session) {
         setUserId(data.session.user.id)
@@ -143,44 +149,6 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
     } catch (error: any) {
       console.error(error)
       alert("Código inválido o ha expirado.")
-    }
-    setLoading(false)
-  }
-
-  // 2.5 Iniciar sesión con contraseña
-  const handlePasswordLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!email || !password) return
-    setLoading(true)
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) throw error
-      if (data.session) {
-        setUserId(data.session.user.id)
-        setStep(3)
-      }
-    } catch (error: any) {
-      console.error(error)
-      alert("Credenciales inválidas.")
-    }
-    setLoading(false)
-  }
-
-  // Refrescar sesión manualmente
-  const handleRefreshAuth = async () => {
-    setLoading(true)
-    const { data: { session } } = await supabase.auth.refreshSession()
-    if (session) {
-      setUserId(session.user.id)
-      setStep(3)
-    } else {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        setUserId(user.id)
-        setStep(3)
-      } else {
-        alert("Aún no detectamos tu confirmación. Revisa tu correo o ingresa el código.")
-      }
     }
     setLoading(false)
   }
@@ -271,7 +239,7 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
         comercio_id: comercioId,
         user_id: userId,
         cliente_nombre: nombre || direccionExistente?.nombre || "Cliente Anónimo",
-        cliente_telefono: telefono,
+        cliente_telefono: telefono || telefonoAuth.replace(/\\D/g, '').slice(-10),
         direccion_entrega: direccionFinalStr,
         lat: latFinal,
         lng: lngFinal,
@@ -309,90 +277,68 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
   // --- RENDERS POR PASO ---
 
   const renderStep1 = () => (
-    <form onSubmit={usePassword ? handlePasswordLogin : handleEnviarEmail} className="space-y-6 px-6 pb-6">
+    <form onSubmit={handleEnviarSMS} className="space-y-6 px-6 pb-6">
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label className="text-muted-foreground font-bold uppercase tracking-wider text-xs">Tu Correo Electrónico</Label>
-          <div className="relative">
-            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
+          <Label className="text-zinc-400 font-bold uppercase tracking-wider text-xs">Tu Número de Celular</Label>
+          <div className="relative flex items-center">
+            <div className="absolute left-0 top-0 bottom-0 flex items-center justify-center pl-4 pr-3 text-zinc-400 font-bold border-r border-zinc-800">
+              +52
+            </div>
             <Input 
-              type="email" 
-              placeholder="ejemplo@correo.com" 
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="h-16 pl-12 rounded-[1.5rem] bg-secondary border-transparent text-lg font-bold placeholder:text-muted-foreground/50 focus-visible:ring-orange-500"
+              type="tel" 
+              placeholder="123 456 7890" 
+              value={telefonoAuth}
+              onChange={(e) => setTelefonoAuth(e.target.value)}
+              className="h-14 pl-16 rounded-[1.25rem] bg-zinc-900 border-zinc-800 text-white font-bold placeholder:text-zinc-600 focus-visible:ring-orange-500"
               required
               autoFocus
+              maxLength={14}
             />
           </div>
+          <p className="text-xs text-zinc-500 pt-2">Te enviaremos un código temporal por SMS para acceder.</p>
         </div>
-
-        {usePassword && (
-          <div className="space-y-2 animate-in fade-in zoom-in-95 duration-200">
-            <Label className="text-muted-foreground font-bold uppercase tracking-wider text-xs">Contraseña</Label>
-            <div className="relative">
-              <Input 
-                type="password" 
-                placeholder="••••••••" 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="h-16 rounded-[1.5rem] bg-secondary border-transparent text-lg font-bold placeholder:text-muted-foreground/50 focus-visible:ring-orange-500 px-6"
-                required
-              />
-            </div>
-          </div>
-        )}
-
-        {!usePassword && (
-          <p className="text-xs text-muted-foreground pt-2">Te enviaremos un código temporal para acceder rápidamente sin contraseñas.</p>
-        )}
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-3 pt-2">
         <Button 
           type="submit" 
-          disabled={loading || !email || (usePassword && !password)}
-          className="w-full h-16 rounded-[2rem] bg-orange-500 hover:bg-orange-600 text-white font-black text-lg uppercase tracking-wider shadow-lg shadow-orange-500/30"
+          disabled={loading || telefonoAuth.replace(/\\D/g, '').length < 10}
+          className="w-full h-14 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-lg shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-transform"
         >
-          {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <>{usePassword ? 'Iniciar Sesión' : 'Continuar'} <ArrowRight className="ml-2 w-5 h-5" /></>}
-        </Button>
-        <Button 
-          type="button"
-          variant="ghost" 
-          onClick={() => setUsePassword(!usePassword)} 
-          className="w-full font-bold text-muted-foreground"
-        >
-          {usePassword ? 'Usar código por correo (OTP)' : 'Entrar con Contraseña'}
+          {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Enviar código'}
         </Button>
       </div>
     </form>
   )
 
   const renderStep2 = () => (
-    <form onSubmit={handleVerificarOTP} className="space-y-6 px-6 pb-6 animate-in slide-in-from-right-8 duration-300">
+    <form onSubmit={handleVerificarSMS} className="space-y-6 px-6 pb-6 animate-in slide-in-from-right-8 duration-300">
       <div className="space-y-4 flex flex-col items-center text-center">
-        <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center">
-          <Mail className="w-8 h-8 text-orange-500" />
+        <div className="w-16 h-16 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center">
+          <Phone className="w-8 h-8 text-orange-500" />
         </div>
         <div>
-          <h3 className="font-black text-xl text-foreground">Revisa tu correo</h3>
-          <p className="text-sm text-muted-foreground mt-1">Ingresa el código de 6 dígitos enviado a <strong className="text-foreground">{email}</strong></p>
+          <h3 className="font-black text-xl text-white">Ingresa el código</h3>
+          <p className="text-sm text-zinc-400 mt-1">
+            Enviamos un código al <strong className="text-white">+52 {telefonoAuth.replace(/\\D/g, '').slice(-10)}</strong>
+          </p>
         </div>
         
-        <div className="py-4">
+        <div className="py-4 flex justify-center">
           <InputOTP
             maxLength={6}
             value={otp}
             onChange={(val) => setOtp(val)}
             autoFocus
           >
-            <InputOTPGroup>
-              <InputOTPSlot index={0} className="h-12 w-12 sm:h-14 sm:w-14 text-2xl" />
-              <InputOTPSlot index={1} className="h-12 w-12 sm:h-14 sm:w-14 text-2xl" />
-              <InputOTPSlot index={2} className="h-12 w-12 sm:h-14 sm:w-14 text-2xl" />
-              <InputOTPSlot index={3} className="h-12 w-12 sm:h-14 sm:w-14 text-2xl" />
-              <InputOTPSlot index={4} className="h-12 w-12 sm:h-14 sm:w-14 text-2xl" />
-              <InputOTPSlot index={5} className="h-12 w-12 sm:h-14 sm:w-14 text-2xl" />
+            <InputOTPGroup className="gap-2">
+              <InputOTPSlot index={0} className="h-14 w-12 sm:w-14 text-2xl bg-zinc-900 border-zinc-800 text-white rounded-xl" />
+              <InputOTPSlot index={1} className="h-14 w-12 sm:w-14 text-2xl bg-zinc-900 border-zinc-800 text-white rounded-xl" />
+              <InputOTPSlot index={2} className="h-14 w-12 sm:w-14 text-2xl bg-zinc-900 border-zinc-800 text-white rounded-xl" />
+              <InputOTPSlot index={3} className="h-14 w-12 sm:w-14 text-2xl bg-zinc-900 border-zinc-800 text-white rounded-xl" />
+              <InputOTPSlot index={4} className="h-14 w-12 sm:w-14 text-2xl bg-zinc-900 border-zinc-800 text-white rounded-xl" />
+              <InputOTPSlot index={5} className="h-14 w-12 sm:w-14 text-2xl bg-zinc-900 border-zinc-800 text-white rounded-xl" />
             </InputOTPGroup>
           </InputOTP>
         </div>
@@ -402,25 +348,17 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
         <Button 
           type="submit" 
           disabled={loading || otp.length !== 6}
-          className="w-full h-16 rounded-[2rem] bg-orange-500 hover:bg-orange-600 text-white font-black text-lg uppercase tracking-wider shadow-lg shadow-orange-500/30"
+          className="w-full h-14 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-lg shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-transform"
         >
-          {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Verificar Código'}
-        </Button>
-        <Button 
-          type="button"
-          variant="outline" 
-          onClick={handleRefreshAuth} 
-          className="w-full h-12 rounded-xl font-bold border-orange-200 text-orange-600 hover:bg-orange-50"
-        >
-          {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : '¿Ya confirmaste? Haz clic aquí'}
+          {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Confirmar y Pedir'}
         </Button>
         <Button 
           type="button"
           variant="ghost" 
           onClick={() => setStep(1)} 
-          className="w-full font-bold text-muted-foreground"
+          className="w-full font-bold text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-xl h-12"
         >
-          Usar otro correo
+          Regresar (Cambiar número)
         </Button>
       </div>
     </form>
@@ -430,16 +368,16 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
     <div className="px-6 pb-6 space-y-6 animate-in slide-in-from-right-8 duration-300">
       {!editandoDireccion && direccionExistente ? (
         <div className="space-y-4">
-          <div className="p-5 rounded-[1.5rem] bg-orange-50 border-2 border-orange-200">
+          <div className="p-5 rounded-[1.5rem] bg-zinc-900 border border-zinc-800">
             <div className="flex items-start gap-3 mb-2">
               <MapPin className="text-orange-500 w-6 h-6 shrink-0 mt-1" />
               <div>
-                <h4 className="font-black text-orange-900 text-lg">Dirección Guardada</h4>
-                <p className="font-bold text-orange-800/80 leading-snug mt-1">
+                <h4 className="font-black text-white text-lg">Dirección Guardada</h4>
+                <p className="font-bold text-zinc-300 leading-snug mt-1">
                   {direccionExistente.calle} #{direccionExistente.numero}
                 </p>
                 {direccionExistente.colonia && (
-                  <p className="text-sm text-orange-700 mt-2 italic border-t border-orange-200/50 pt-2">
+                  <p className="text-sm text-zinc-500 mt-2 italic border-t border-zinc-800 pt-2">
                     Colonia: {direccionExistente.colonia}
                   </p>
                 )}
@@ -449,7 +387,7 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
           <Button 
             variant="outline" 
             onClick={() => setEditandoDireccion(true)}
-            className="w-full h-12 rounded-xl border-orange-200 text-orange-600 font-bold hover:bg-orange-50"
+            className="w-full h-12 rounded-xl border-zinc-800 text-orange-500 font-bold hover:bg-zinc-900 bg-transparent hover:text-orange-400"
           >
             Editar Dirección / Entregar en otro lugar
           </Button>
@@ -457,55 +395,55 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
       ) : (
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label className="text-muted-foreground font-bold">Tu Nombre (Para entregarte)</Label>
+            <Label className="text-zinc-400 font-bold">Tu Nombre (Para entregarte)</Label>
             <Input 
               value={nombre} 
               onChange={(e) => setNombre(e.target.value)} 
               placeholder="Juan Pérez" 
-              className="h-14 rounded-xl bg-secondary border-transparent"
+              className="h-14 rounded-xl bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-600"
             />
           </div>
           <div className="space-y-2">
-            <Label className="text-muted-foreground font-bold">Teléfono de Contacto</Label>
+            <Label className="text-zinc-400 font-bold">Teléfono de Contacto</Label>
             <div className="relative">
-              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
+              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 w-5 h-5" />
               <Input 
                 type="tel"
                 value={telefono} 
-                onChange={(e) => setTelefono(e.target.value.replace(/\D/g, ''))} 
+                onChange={(e) => setTelefono(e.target.value.replace(/\\D/g, ''))} 
                 placeholder="686 123 4567" 
                 maxLength={10}
-                className="h-14 pl-12 rounded-xl bg-secondary border-transparent font-bold tracking-wider"
+                className="h-14 pl-12 rounded-xl bg-zinc-900 border-zinc-800 text-white font-bold tracking-wider placeholder:text-zinc-600"
               />
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2 space-y-2">
-              <Label className="text-muted-foreground font-bold">Calle</Label>
+              <Label className="text-zinc-400 font-bold">Calle</Label>
               <Input 
                 value={calle} 
                 onChange={(e) => setCalle(e.target.value)} 
                 placeholder="Ej. Av. Reforma" 
-                className="h-14 rounded-xl bg-secondary border-transparent"
+                className="h-14 rounded-xl bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-600"
               />
             </div>
             <div className="col-span-1 space-y-2">
-              <Label className="text-muted-foreground font-bold">Número</Label>
+              <Label className="text-zinc-400 font-bold">Número</Label>
               <Input 
                 value={numero} 
                 onChange={(e) => setNumero(e.target.value)} 
                 placeholder="#123" 
-                className="h-14 rounded-xl bg-secondary border-transparent"
+                className="h-14 rounded-xl bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-600"
               />
             </div>
           </div>
           <div className="space-y-2">
-            <Label className="text-muted-foreground font-bold">Colonia</Label>
+            <Label className="text-zinc-400 font-bold">Colonia</Label>
             <Input 
               value={colonia} 
               onChange={(e) => setColonia(e.target.value)} 
               placeholder="Ej. Centro, Jardines del Valle" 
-              className="h-14 rounded-xl bg-secondary border-transparent"
+              className="h-14 rounded-xl bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-600"
             />
           </div>
 
@@ -513,7 +451,7 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
             type="button"
             onClick={handleGetLocation}
             variant="secondary"
-            className={`w-full h-14 rounded-xl font-bold flex items-center gap-2 border-2 transition-all ${coords ? 'bg-green-50 border-green-500 text-green-700' : 'bg-secondary border-transparent text-foreground hover:bg-secondary/80'}`}
+            className={`w-full h-14 rounded-xl font-bold flex items-center gap-2 border-2 transition-all ${coords ? 'bg-green-900/30 border-green-500 text-green-500' : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800'}`}
           >
             {gpsLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Map className="w-5 h-5" />}
             {coords ? '✅ Ubicación GPS Capturada' : 'Capturar mi ubicación GPS (Recomendado)'}
@@ -525,7 +463,7 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
         <Button 
           onClick={handleConfirmarPedido}
           disabled={loading}
-          className="w-full h-16 rounded-[2rem] bg-orange-500 hover:bg-orange-600 text-white font-black text-xl uppercase tracking-wider shadow-xl shadow-orange-500/30 transition-transform active:scale-95"
+          className="w-full h-16 rounded-[2rem] bg-orange-500 hover:bg-orange-600 text-white font-black text-xl shadow-xl shadow-orange-500/20 transition-transform active:scale-95"
         >
           {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Confirmar Pedido'}
         </Button>
@@ -536,7 +474,7 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
             setUserId(null)
             setStep(1)
           }} 
-          className="font-bold text-muted-foreground"
+          className="font-bold text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 rounded-xl h-12 mt-2"
         >
           Cerrar Sesión
         </Button>
@@ -546,11 +484,11 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
 
   const renderStep4 = () => (
     <div className="px-6 pb-12 flex flex-col items-center text-center space-y-6 animate-in zoom-in-95 duration-500">
-      <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-2">
+      <div className="w-24 h-24 bg-green-900/30 rounded-full flex items-center justify-center mb-2 border border-green-800/50">
         <CheckCircle2 className="w-12 h-12 text-green-500" />
       </div>
-      <h2 className="text-3xl font-black tracking-tighter text-foreground">¡Pedido Confirmado!</h2>
-      <p className="text-muted-foreground text-lg leading-relaxed">
+      <h2 className="text-3xl font-black tracking-tighter text-white">¡Pedido Confirmado!</h2>
+      <p className="text-zinc-400 text-lg leading-relaxed">
         El restaurante ya está recibiendo tu orden.<br/>¡Tu comida llegará muy pronto!
       </p>
       <Button 
@@ -558,7 +496,7 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
           onClose()
           setTimeout(() => setStep(1), 500)
         }}
-        className="mt-6 w-full h-14 rounded-2xl font-bold bg-secondary text-foreground hover:bg-secondary/80"
+        className="mt-6 w-full h-14 rounded-2xl font-bold bg-zinc-800 text-white hover:bg-zinc-700"
       >
         Volver al Menú
       </Button>
@@ -576,11 +514,10 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
         }, 500)
       }
     }}>
-      <DrawerContent className="max-h-[90vh] flex flex-col bg-background text-foreground border-border">
-        {/* Título oculto para accesibilidad cuando el Header visual está escondido */}
-        {(authChecking || step === 4) && (
-          <DrawerTitle className="sr-only">Checkout Sabor Local</DrawerTitle>
-        )}
+      <DrawerContent className="max-h-[95vh] flex flex-col bg-zinc-950 text-white border-zinc-900 rounded-t-[2rem]">
+        {/* Título oculto para accesibilidad */}
+        <DrawerTitle className="sr-only">Checkout Sabor Local</DrawerTitle>
+        
         {authChecking ? (
           <div className="flex-1 flex items-center justify-center py-20">
             <Loader2 className="w-10 h-10 animate-spin text-orange-500" />
@@ -591,15 +528,15 @@ export function CheckoutDrawer({ isOpen, onClose }: CheckoutDrawerProps) {
               <DrawerHeader className="text-center pt-8 pb-6 shrink-0 relative">
                 <button 
                   onClick={onClose}
-                  className="absolute right-4 top-4 p-2 rounded-full bg-secondary text-muted-foreground hover:bg-secondary/80 transition-colors"
+                  className="absolute right-4 top-4 p-2 rounded-full bg-zinc-900 text-zinc-400 hover:bg-zinc-800 transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
-                <DrawerTitle className="text-3xl font-black italic uppercase tracking-tighter">
-                  {step <= 2 ? 'Acceso Rápido' : 'Detalles de Entrega'}
+                <DrawerTitle className="text-3xl font-black tracking-tighter">
+                  {step <= 2 ? 'Inicia Sesión' : 'Detalles de Entrega'}
                 </DrawerTitle>
-                <DrawerDescription className="text-base font-medium mt-1">
-                  {step === 1 && 'Ingresa tu correo para continuar'}
+                <DrawerDescription className="text-base font-medium mt-1 text-zinc-400">
+                  {step === 1 && 'Ingresa tu celular para pedir'}
                   {step === 2 && 'Confirma tu identidad'}
                   {step === 3 && '¿A dónde enviamos tu comida?'}
                 </DrawerDescription>
